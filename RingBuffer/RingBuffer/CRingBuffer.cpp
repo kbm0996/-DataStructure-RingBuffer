@@ -42,7 +42,13 @@ int CRingBuffer::GetFreeSize()
 int CRingBuffer::GetUnbrokenEnqueueSize()
 {
 	if (_iReadPos > _iWritePos)
-		return _iReadPos - (_iWritePos + en_BUFFER_BLANK);
+	{
+		int iRetval = _iReadPos - (_iWritePos + en_BUFFER_BLANK);
+		if (iRetval < 0)
+			return 0;
+
+		return iRetval;
+	}
 	else
 	{
 		if (_iReadPos < en_BUFFER_BLANK)
