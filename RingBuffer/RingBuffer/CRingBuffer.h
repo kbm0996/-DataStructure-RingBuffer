@@ -7,7 +7,10 @@ public:
 	enum en_RING_BUFFER
 	{
 		en_BUFFER_DEFALUT = 1000,
-		en_BUFFER_BLANK = 1	// ReadPos, WritePos 계산용 여유 공간
+		en_BUFFER_BLANK = 1	
+		//  TODO : en_BUFFER_BLANK == 각종 크기 계산용 여유 공간
+		// iReadPos나 iWritePos만으로 사이즈를 구하는 것은 불가능하다. 비었을 경우나, 꽉찬 경우 모두 HEAD == TAIL이 성립하기 때문
+
 	};
 
 	CRingBuffer(int iSize = en_BUFFER_DEFALUT);
