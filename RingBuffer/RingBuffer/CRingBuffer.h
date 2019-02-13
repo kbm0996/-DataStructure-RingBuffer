@@ -7,19 +7,20 @@ public:
 	enum en_RING_BUFFER
 	{
 		en_BUFFER_DEFALUT = 1000,
+		en_BUFFER_BLANK = 1	// ReadPos, WritePos 계산용 여유 공간
 	};
 
-	CRingBuffer(int iBufferSize = en_BUFFER_DEFALUT);
+	CRingBuffer(int iSize = en_BUFFER_DEFALUT);
 	virtual ~CRingBuffer();
 
 	void	Clear();		// 버퍼의 모든 데이터 삭제
 
-	int		GetTotalSize();	// 버퍼 총 크기
+	int		GetSize();	// 버퍼 총 크기
 	int		GetUseSize();	// 사용 크기
 	int		GetFreeSize();	// 미사용 크기
 
 	/////////////////////////////////////////////////////////////////////////
-	// 메모리상에서 끊기지 않고 입력할 수 있는 최대 크기
+	// 메모리상에서 끊기지 않고 입출력할 수 있는 최대 크기
 	//
 	// Parameters: 
 	// Return: (int)사용 가능 크기
