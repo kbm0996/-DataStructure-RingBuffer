@@ -1,157 +1,148 @@
 #include "CRingBuffer.h"
-#include <Windows.h>
 
-CRingBuffer::CRingBuffer(int iSize) : _iReadPos(0), _iWritePos(0), _iSize(iSize), _pBuffer(new char[iSize])
+using namespace mylib;
+
+
+CRingBuffer::CRingBuffer(int iBufferSize)
 {
+	_iBufferSize = iBufferSize;
+	_pBuffer = new char[iBufferSize];
+	_iRead = 0;
+	_iWrite = 0;
+
+	InitializeSRWLock(&_srwLock);
 }
 
 CRingBuffer::~CRingBuffer()
 {
-	if(_pBuffer != nullptr)
+	if (_pBuffer != nullptr)
 		delete[] _pBuffer;
 	_pBuffer = nullptr;
 }
 
-void CRingBuffer::Clear()
+void CRingBuffer::Lock()
 {
-	_iReadPos = 0;
-	_iWritePos = 0;
+	AcquireSRWLockExclusive(&_srwLock);
 }
 
-int CRingBuffer::GetSize()
+void CRingBuffer::Unlock()
 {
-	return _iSize - en_BUFFER_BLANK;
+	ReleaseSRWLockExclusive(&_srwLock);
 }
 
 int CRingBuffer::GetUseSize()
 {
-	if (_iReadPos > _iWritePos)
-		return _iSize - _iReadPos + _iWritePos;
-	else 
-		return _iWritePos - _iReadPos;
+	if (_iWrite >= _iRead)
+		return _iWrite - _iRead;
+	else
+		return (_iBufferSize - _iRead) + _iWrite;
 }
 
 int CRingBuffer::GetFreeSize()
 {
-	if (_iReadPos > _iWritePos)
-		return _iReadPos - (_iWritePos + en_BUFFER_BLANK);
-	else
-		return _iSize - (_iWritePos + en_BUFFER_BLANK) + _iReadPos;
-}
-
-int CRingBuffer::GetUnbrokenEnqueueSize()
-{
-	if (_iReadPos > _iWritePos)
-	{
-		int iRetval = _iReadPos - (_iWritePos + en_BUFFER_BLANK);
-		if (iRetval < 0)
-			return 0;
-
-		return iRetval;
-	}
-	else
-	{
-		if (_iReadPos < en_BUFFER_BLANK)
-		{
-			int iRetval = _iSize - _iWritePos - (en_BUFFER_BLANK - _iReadPos);
-			if (iRetval < 0) 
-				return 0;
-
-			return iRetval;
-		}
-
-		return _iSize - _iWritePos;
-	}
+	return _iBufferSize - GetUseSize() - 1;
 }
 
 int CRingBuffer::GetUnbrokenDequeueSize()
 {
-	if (_iReadPos > _iWritePos)
-		return _iSize - _iReadPos;
-
-	return _iWritePos - _iReadPos;
+	if (_iWrite >= _iRead)
+		return _iWrite - _iRead;
+	else
+		return _iBufferSize - _iRead;
 }
 
-int CRingBuffer::Enqueue(char * pInData, int iSize)
+int CRingBuffer::GetUnbrokenEnqueueSize()
 {
-	if (iSize <= 0)
+	if ((_iWrite + 1) % _iBufferSize == _iRead)
 		return 0;
 
-	if (GetFreeSize() < iSize)
+	if (_iWrite <= ((_iRead + _iBufferSize - 1) % _iBufferSize))
+		return ((_iRead + _iBufferSize - 1) % _iBufferSize) - _iWrite;
+	else if (_iWrite >= _iRead)
+		return _iBufferSize - _iWrite;
+
+	return 0;
+}
+
+int CRingBuffer::Enqueue(char * chpData, int iSize)
+{
+	if ((_iWrite + 1) % _iBufferSize == _iRead)
+		return 0;
+
+	if (GetFreeSize() <= iSize)
 		iSize = GetFreeSize();
 
-	int iEnqueueSize = GetUnbrokenEnqueueSize();
-	if (iSize <= iEnqueueSize)
-	{
-		memcpy(_pBuffer + _iWritePos, pInData, iSize);
-	}
+	if (GetUnbrokenEnqueueSize() >= iSize)
+		memcpy((_pBuffer + _iWrite), chpData, iSize);
 	else
 	{
-		memcpy(_pBuffer + _iWritePos, pInData, iEnqueueSize);
-		memcpy(_pBuffer, pInData + iEnqueueSize, iSize - iEnqueueSize);
+		int PutSize = GetUnbrokenEnqueueSize();
+		memcpy((_pBuffer + _iWrite), chpData, PutSize);
+		memcpy(_pBuffer, (chpData + PutSize), iSize - PutSize);
 	}
 
-	_iWritePos = (iSize + _iWritePos) % _iSize;
+	_iWrite = (_iWrite + iSize) % _iBufferSize;
 
 	return iSize;
 }
 
-int CRingBuffer::Dequeue(char * pOutData, int iSize)
+int CRingBuffer::Dequeue(char * pDest, int iSize)
 {
-	if (iSize <= 0)
+	if (_iRead == _iWrite)
 		return 0;
 
-	if (GetUseSize() < iSize)
+	if (GetUseSize() <= iSize)
 		iSize = GetUseSize();
 
-	int iDequeueSize = GetUnbrokenDequeueSize();
-	if (iSize <= iDequeueSize)
-	{
-		memcpy(pOutData, _pBuffer + _iReadPos, iSize);
-	}
+	if (GetUnbrokenDequeueSize() >= iSize)
+		memcpy(pDest, (_pBuffer + _iRead), iSize);
 	else
 	{
-		memcpy(pOutData, _pBuffer + _iReadPos, iDequeueSize);
-		memcpy(pOutData + iDequeueSize, _pBuffer, iSize - iDequeueSize);
+		int GetSize = GetUnbrokenDequeueSize();
+		memcpy(pDest, (_pBuffer + _iRead), GetSize);
+		memcpy((pDest + GetSize), _pBuffer, iSize - GetSize);
 	}
 
-	_iReadPos = (iSize + _iReadPos) % _iSize;
+	_iRead = (_iRead + iSize) % _iBufferSize;
 
 	return iSize;
 }
 
-int CRingBuffer::Peek(char * pOutData, int iSize)
+int CRingBuffer::Peek(char * pDest, int iSize)
 {
-	if (iSize <= 0)
+	if (_iRead == _iWrite)
 		return 0;
 
-	if (GetUseSize() < iSize)
+	if (GetUseSize() <= iSize)
 		iSize = GetUseSize();
 
-	int iDequeueSize = GetUnbrokenDequeueSize();
-	if (iSize <= iDequeueSize)
-	{
-		memcpy(pOutData, _pBuffer + _iReadPos, iSize);
-	}
+
+	if (GetUnbrokenDequeueSize() >= iSize)
+		memcpy(pDest, (_pBuffer + _iRead), iSize);
 	else
 	{
-		memcpy(pOutData, _pBuffer + _iReadPos, iDequeueSize);
-		memcpy(pOutData + iDequeueSize, _pBuffer, iSize - iDequeueSize);
+		int GetSize = GetUnbrokenDequeueSize();
+		memcpy(pDest, (_pBuffer + _iRead), GetSize);
+		memcpy((pDest + GetSize), _pBuffer, iSize - GetSize);
 	}
 
 	return iSize;
 }
 
-void CRingBuffer::RemoveData(int iSize)
+void CRingBuffer::MoveReadPos(int iSize)
 {
-	_iReadPos = (iSize + _iReadPos) % _iSize;
+	_iRead = (_iRead + iSize) % _iBufferSize;
 }
 
 int CRingBuffer::MoveWritePos(int iSize)
 {
-	_iWritePos = (iSize + _iWritePos) % _iSize;
-
+	_iWrite = (_iWrite + iSize) % _iBufferSize;
 	return iSize;
+}
+
+void CRingBuffer::Clear()
+{
+	_iRead = _iWrite = 0;
 }
 
 char * CRingBuffer::GetBufferPtr()
@@ -161,10 +152,10 @@ char * CRingBuffer::GetBufferPtr()
 
 char * CRingBuffer::GetReadBufferPtr()
 {
-	return _pBuffer + _iReadPos;
+	return &_pBuffer[_iRead];
 }
 
 char * CRingBuffer::GetWriteBufferPtr()
 {
-	return _pBuffer + _iWritePos;
+	return &_pBuffer[_iWrite];
 }

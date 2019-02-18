@@ -4,8 +4,9 @@
 #include <ctime>
 #include "CRingBuffer.h"
 #include <conio.h>
-
 #include <Windows.h>
+using namespace mylib;
+
 #define df_TEST_DEQUEUE
 
 #define _iSize 10
@@ -30,7 +31,7 @@ void main()
 
 	printf("GetFreeSize	%d \n", RingBuffer->GetFreeSize());
 	printf("GetUseSize	%d \n", RingBuffer->GetUseSize());
-	printf("GetSize	%d \n", RingBuffer->GetSize());
+	printf("GetSize	%d \n", RingBuffer->GetBufferSize());
 	printf("GetUnbrokenDequeueSize	%d \n", RingBuffer->GetUnbrokenDequeueSize());
 	printf("GetUnbrokenEnqueueSize	%d \n", RingBuffer->GetUnbrokenEnqueueSize());
 
